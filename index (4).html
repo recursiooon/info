@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>recursion — OSINT · DevOps · Red Team</title>
+
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Framer Motion CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.18.0/dist/framer-motion.umd.min.js"></script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <style>
+    /* ─── Reset & Base ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #09090B;
+      --card:      #111111;
+      --red:       #ff3b30;
+      --blue:      #2563eb;
+      --text:      #ffffff;
+      --muted:     #9ca3af;
+      --border:    rgba(255,255,255,0.06);
+      --glow-red:  rgba(255, 59, 48, 0.35);
+      --glow-blue: rgba(37, 99, 235, 0.35);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    /* ─── Custom Cursor ─── */
+    #cursor {
+      position: fixed;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--red);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s ease, width 0.2s, height 0.2s, opacity 0.2s;
+      box-shadow: 0 0 18px 6px var(--glow-red);
+    }
+    #cursor-ring {
+      position: fixed;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,59,48,0.4);
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: transform 0.18s ease, width 0.25s, height 0.25s, opacity 0.2s;
+    }
+
+    /* ─── Noise Overlay ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.4;
+    }
+
+    /* ─── Grid Background ─── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .grid-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(37,99,235,0.07) 0%, transparent 70%);
+    }
+
+    /* ─── Content Wrapper ─── */
+    main { position: relative; z-index: 2; }
+
+    /* ─── Navbar ─── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 18px 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(9,9,11,0.7);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-logo span { color: var(--red); }
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a {
+      font-size: 0.82rem; color: var(--muted); text-decoration: none;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ─── Section Spacing ─── */
+    section { padding: 110px 40px; max-width: 1200px; margin: 0 auto; }
+
+    /* ─── Hero ─── */
+    #hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding-top: 120px;
+      max-width: 1200px; margin: 0 auto;
+      gap: 60px;
+    }
+    .hero-left { flex: 1; }
+    .hero-eyebrow {
+      display: inline-flex; gap: 10px; align-items: center;
+      font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 24px;
+    }
+    .hero-eyebrow span {
+      color: var(--red);
+      text-shadow: 0 0 12px var(--glow-red);
+    }
+    .hero-eyebrow .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+    .hero-title {
+      font-size: clamp(3.5rem, 9vw, 7.5rem);
+      font-weight: 800;
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      margin-bottom: 28px;
+    }
+    .hero-title .accent-red { color: var(--red); text-shadow: 0 0 40px var(--glow-red); }
+    .hero-title .accent-dim { color: rgba(255,255,255,0.15); }
+    .hero-sub {
+      font-size: 0.75rem; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 28px;
+      display: flex; gap: 16px; align-items: center;
+    }
+    .hero-sub::before, .hero-sub::after {
+      content: ''; flex: 1; max-width: 40px;
+      height: 1px; background: var(--border);
+    }
+    .hero-desc {
+      font-size: 0.97rem; line-height: 1.8; color: var(--muted);
+      max-width: 480px; margin-bottom: 40px;
+    }
+    .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; }
+
+    /* ─── Buttons ─── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 28px;
+      border-radius: 8px;
+      font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em;
+      text-decoration: none; cursor: pointer; border: none;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .btn::before {
+      content: ''; position: absolute; inset: 0;
+      background: white; opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .btn:hover::before { opacity: 0.06; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-red {
+      background: var(--red);
+      color: #fff;
+      box-shadow: 0 4px 24px var(--glow-red);
+    }
+    .btn-red:hover { box-shadow: 0 8px 40px var(--glow-red); }
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: rgba(255,255,255,0.15); }
+
+    /* ─── Hero Illustration ─── */
+    .hero-right {
+      flex: 1; display: flex; justify-content: center; align-items: center;
+      min-height: 420px;
+    }
+    .hero-svg-wrap {
+      position: relative; width: 100%; max-width: 520px;
+    }
+    .hero-svg-wrap svg { width: 100%; height: auto; }
+    .svg-glow-red {
+      filter: drop-shadow(0 0 18px rgba(255,59,48,0.7));
+      animation: pulse-glow 3s ease-in-out infinite alternate;
+    }
+    .svg-glow-blue {
+      filter: drop-shadow(0 0 14px rgba(37,99,235,0.6));
+      animation: pulse-glow 3.5s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes pulse-glow {
+      from { opacity: 0.7; }
+      to   { opacity: 1; }
+    }
+    .float-anim { animation: float 6s ease-in-out infinite; }
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-14px); }
+    }
+    .float-anim2 { animation: float2 8s ease-in-out infinite; }
+    @keyframes float2 {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      50%      { transform: translateY(-8px) rotate(2deg); }
+    }
+
+    /* ─── Section Titles ─── */
+    .section-label {
+      font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--red); margin-bottom: 14px;
+      text-shadow: 0 0 12px var(--glow-red);
+    }
+    .section-title {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 14px;
+    }
+    .section-divider {
+      width: 48px; height: 2px;
+      background: linear-gradient(90deg, var(--red), transparent);
+      margin-bottom: 56px;
+    }
+
+    /* ─── Glass Card ─── */
+    .glass-card {
+      background: rgba(17,17,17,0.7);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+    }
+    .glass-card:hover {
+      border-color: rgba(255,59,48,0.25);
+      box-shadow: 0 0 40px rgba(255,59,48,0.08), 0 20px 40px rgba(0,0,0,0.4);
+      transform: translateY(-4px);
+    }
+
+    /* ─── About Section ─── */
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+    .about-text { font-size: 0.97rem; line-height: 1.85; color: var(--muted); }
+    .about-text p + p { margin-top: 18px; }
+    .interests-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .interest-tag {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.82rem; color: var(--muted);
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      cursor: default;
+    }
+    .interest-tag:hover {
+      border-color: rgba(37,99,235,0.35);
+      color: var(--text);
+      background: rgba(37,99,235,0.06);
+    }
+    .interest-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex-shrink: 0; box-shadow: 0 0 8px var(--glow-blue); }
+
+    /* ─── Skills ─── */
+    .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .skill-card { padding: 32px; }
+    .skill-icon-wrap {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .skill-icon-wrap.red  { background: rgba(255,59,48,0.12); box-shadow: 0 0 20px rgba(255,59,48,0.15); }
+    .skill-icon-wrap.blue { background: rgba(37,99,235,0.12); box-shadow: 0 0 20px rgba(37,99,235,0.15); }
+    .skill-icon-wrap.gray { background: rgba(255,255,255,0.06); }
+    .skill-card h3 {
+      font-size: 1.1rem; font-weight: 700; margin-bottom: 18px;
+      letter-spacing: -0.01em;
+    }
+    .skill-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .skill-tag {
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem; color: var(--muted);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .skill-tag:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+
+    /* ─── Timeline ─── */
+    .timeline { position: relative; padding-left: 32px; }
+    .timeline::before {
+      content: '';
+      position: absolute; left: 0; top: 8px; bottom: 8px;
+      width: 1px;
+      background: linear-gradient(to bottom, var(--red), rgba(37,99,235,0.4), transparent);
+    }
+    .timeline-item {
+      position: relative; margin-bottom: 40px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute; left: -39px; top: 8px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 2px solid var(--red);
+      box-shadow: 0 0 14px var(--glow-red);
+    }
+    .timeline-card { padding: 28px 32px; }
+    .timeline-date {
+      font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--red); margin-bottom: 10px;
+    }
+    .timeline-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+    .timeline-role {
+      font-size: 0.82rem; color: var(--blue); margin-bottom: 12px;
+      text-shadow: 0 0 10px var(--glow-blue);
+    }
+    .timeline-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.7; }
+
+    /* ─── Stats ─── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .stat-card {
+      padding: 32px 24px;
+      text-align: center;
+      cursor: default;
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+    }
+    .stat-card:hover {
+      border-color: rgba(255,59,48,0.3);
+      box-shadow: 0 0 50px rgba(255,59,48,0.1), 0 0 0 1px rgba(255,59,48,0.15);
+      transform: translateY(-5px);
+    }
+    .stat-number {
+      font-size: 2.6rem; font-weight: 800;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, #fff 30%, var(--red));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 6px; letter-spacing: 0.06em; }
+    .stat-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.08em;
+      background: rgba(37,99,235,0.12);
+      border: 1px solid rgba(37,99,235,0.25);
+      color: #93c5fd;
+      margin-top: 8px;
+    }
+
+    /* ─── Contact ─── */
+    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 700px; }
+    .contact-card {
+      padding: 32px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .contact-card-label {
+      font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .contact-value {
+      font-size: 1rem; font-weight: 600; color: var(--text);
+      word-break: break-all;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      position: relative; z-index: 2;
+      border-top: 1px solid var(--border);
+      padding: 36px 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1200px; margin: 0 auto;
+    }
+    .footer-copy { font-size: 0.82rem; color: var(--muted); }
+    .footer-copy span { color: var(--red); }
+    .footer-built { font-size: 0.75rem; color: rgba(156,163,175,0.5); }
+
+    /* ─── Toast ─── */
+    .toast {
+      position: fixed; bottom: 32px; right: 32px;
+      padding: 14px 22px;
+      background: rgba(17,17,17,0.95);
+      border: 1px solid rgba(255,59,48,0.3);
+      border-radius: 10px;
+      font-size: 0.85rem; color: var(--text);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(255,59,48,0.15);
+      z-index: 1000;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ─── Scroll Reveal ─── */
+    .reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ─── Gradient Orbs ─── */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(90px);
+      z-index: 0;
+    }
+    .orb-red  { width: 500px; height: 500px; background: rgba(255,59,48,0.06);  top: -100px; right: -100px; animation: orb-drift 18s ease-in-out infinite alternate; }
+    .orb-blue { width: 400px; height: 400px; background: rgba(37,99,235,0.07); bottom: 100px; left: -80px; animation: orb-drift 22s ease-in-out infinite alternate-reverse; }
+    @keyframes orb-drift {
+      from { transform: translate(0,0); }
+      to   { transform: translate(40px, 40px); }
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      #hero { flex-direction: column; text-align: center; padding-top: 100px; }
+      .hero-desc { max-width: 100%; }
+      .hero-sub::before, .hero-sub::after { display: none; }
+      .hero-buttons { justify-content: center; }
+      .hero-right { display: none; }
+      .about-grid { grid-template-columns: 1fr; }
+      .skills-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .contact-grid { grid-template-columns: 1fr; }
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      section { padding: 80px 20px; }
+      footer { flex-direction: column; gap: 10px; text-align: center; padding: 28px 20px; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .interests-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,59,48,0.4); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- Cursor -->
+  <div id="cursor"></div>
+  <div id="cursor-ring"></div>
+
+  <!-- Background -->
+  <div class="grid-bg"></div>
+  <div class="orb orb-red"></div>
+  <div class="orb orb-blue"></div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">✓ Скопировано в буфер обмена</div>
+
+  <main>
+
+    <!-- ─── NAV ─── -->
+    <nav>
+      <a href="#hero" class="nav-logo">rec<span>_</span>ursion</a>
+      <div class="nav-links">
+        <a href="#about">Обо мне</a>
+        <a href="#skills">Навыки</a>
+        <a href="#experience">Опыт</a>
+        <a href="#stats">Статистика</a>
+        <a href="#contact">Контакты</a>
+      </div>
+    </nav>
+
+    <!-- ─── HERO ─── -->
+    <section id="hero" style="padding-left:40px;padding-right:40px;">
+      <div class="hero-left">
+        <div class="hero-eyebrow reveal">
+          <span>●</span> Доступен к работе
+        </div>
+
+        <h1 class="hero-title reveal reveal-delay-1">
+          rec<span class="accent-red">ur</span><br>sion<span class="accent-dim">.</span>
+        </h1>
+
+        <div class="hero-sub reveal reveal-delay-2">
+          OSINT&nbsp;&bull;&nbsp;DevOps&nbsp;&bull;&nbsp;Red Team
+        </div>
+
+        <p class="hero-desc reveal reveal-delay-3">
+          Провожу OSINT&#8209;расследования, исследую инфраструктуры, анализирую цифровые следы
+          и занимаюсь вопросами информационной безопасности.<br><br>
+          За моей практикой около&nbsp;17 расследований, связанных с мошенничеством,
+          анализом деятельности преступных группировок и расследованием схем,
+          направленных против потребителей. Также специализируюсь на DevOps, инфраструктуре
+          и Red Team.
+        </p>
+
+        <div class="hero-buttons reveal reveal-delay-4">
+          <a href="https://t.me/recursionnnn" target="_blank" class="btn btn-red">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.471c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L6.27 14.385l-2.938-.916c-.637-.2-.65-.637.136-.943l11.467-4.42c.537-.194 1.006.131.627.142z"/></svg>
+            Telegram
+          </a>
+          <a href="mailto:recursionA30@proton.me" class="btn btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            Email
+          </a>
+        </div>
+      </div>
+
+      <!-- SVG Cyberpunk Illustration -->
+      <div class="hero-right reveal reveal-delay-2">
+        <div class="hero-svg-wrap">
+          <svg viewBox="0 0 520 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Glow defs -->
+            <defs>
+              <radialGradient id="gRed" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ff3b30" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#ff3b30" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="gBlue" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#2563eb" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+              </radialGradient>
+              <filter id="blur4"><feGaussianBlur stdDeviation="4"/></filter>
+              <filter id="blur8"><feGaussianBlur stdDeviation="8"/></filter>
+              <filter id="glow-red"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="glow-blue"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <linearGradient id="lgScreen" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#0a1628"/>
+                <stop offset="100%" stop-color="#060d1a"/>
+              </linearGradient>
+              <linearGradient id="lgLaptop" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#1a1a1f"/>
+                <stop offset="100%" stop-color="#111114"/>
+              </linearGradient>
+              <linearGradient id="lgKey" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fbbf24"/>
+                <stop offset="100%" stop-color="#d97706"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Ambient glow pools -->
+            <ellipse cx="260" cy="340" rx="220" ry="80" fill="url(#gBlue)" filter="url(#blur8)" opacity="0.5"/>
+            <ellipse cx="400" cy="180" rx="100" ry="70" fill="url(#gRed)" filter="url(#blur8)" opacity="0.6"/>
+
+            <!-- Network lines (background) -->
+            <g opacity="0.18" stroke="#2563eb" stroke-width="1">
+              <line x1="60" y1="60" x2="170" y2="140"/>
+              <line x1="170" y1="140" x2="320" y2="80"/>
+              <line x1="320" y1="80" x2="460" y2="160"/>
+              <line x1="460" y1="160" x2="400" y2="280"/>
+              <line x1="400" y1="280" x2="460" y2="380"/>
+              <line x1="170" y1="140" x2="80" y2="260"/>
+              <line x1="80" y1="260" x2="150" y2="360"/>
+              <circle cx="60"  cy="60"  r="4" fill="#2563eb"/>
+              <circle cx="170" cy="140" r="4" fill="#2563eb"/>
+              <circle cx="320" cy="80"  r="4" fill="#2563eb"/>
+              <circle cx="460" cy="160" r="4" fill="#2563eb"/>
+              <circle cx="400" cy="280" r="4" fill="#2563eb"/>
+              <circle cx="80"  cy="260" r="4" fill="#2563eb"/>
+              <circle cx="150" cy="360" r="4" fill="#2563eb"/>
+              <circle cx="460" cy="380" r="4" fill="#2563eb"/>
+            </g>
+
+            <!-- ── LAPTOP BASE ── -->
+            <g class="float-anim">
+              <!-- Base body -->
+              <rect x="100" y="300" width="300" height="18" rx="4" fill="url(#lgLaptop)"/>
+              <ellipse cx="250" cy="318" rx="150" ry="5" fill="#000" opacity="0.5"/>
+              <!-- Keyboard deck -->
+              <rect x="110" y="225" width="280" height="76" rx="6" fill="url(#lgLaptop)"/>
+              <!-- Keys grid (simplified) -->
+              <g fill="#1e1e24" opacity="0.8">
+                <rect x="122" y="236" width="256" height="8" rx="2"/>
+                <rect x="122" y="250" width="256" height="8" rx="2"/>
+                <rect x="122" y="264" width="256" height="8" rx="2"/>
+                <rect x="122" y="278" width="256" height="8" rx="2"/>
+              </g>
+              <!-- Touchpad -->
+              <rect x="205" y="287" width="90" height="8" rx="3" fill="#1a1a22"/>
+              <!-- Laptop lid / screen bezel -->
+              <rect x="100" y="100" width="300" height="128" rx="10" fill="url(#lgLaptop)"/>
+              <!-- Screen -->
+              <rect x="110" y="110" width="280" height="108" rx="5" fill="url(#lgScreen)"/>
+
+              <!-- Terminal content on screen -->
+              <text x="120" y="128" font-family="monospace" font-size="8" fill="#4ade80" filter="url(#glow-blue)">root@kali:~# osint --target scan</text>
+              <text x="120" y="140" font-family="monospace" font-size="7.5" fill="#6ee7b7" opacity="0.9">[+] Collecting metadata...</text>
+              <text x="120" y="151" font-family="monospace" font-size="7.5" fill="#6ee7b7" opacity="0.8">[+] SOCMINT profile built</text>
+              <text x="120" y="162" font-family="monospace" font-size="7.5" fill="#ff3b30" opacity="0.9">[!] Threat actor identified</text>
+              <text x="120" y="173" font-family="monospace" font-size="7.5" fill="#60a5fa">[*] Pivoting infrastructure...</text>
+              <text x="120" y="184" font-family="monospace" font-size="7.5" fill="#a78bfa">[*] Enum: AD / 443 / 22</text>
+              <text x="120" y="198" font-family="monospace" font-size="8" fill="#ff3b30" filter="url(#glow-red)">█</text>
+
+              <!-- Screen glow line at bottom -->
+              <rect x="110" y="215" width="280" height="1" fill="#2563eb" opacity="0.4"/>
+            </g>
+
+            <!-- ── CABLES ── -->
+            <path d="M395 310 C430 310 445 350 420 380 C400 400 370 395 360 420" stroke="#1e3a5f" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M110 310 C80 320 60 360 90 400" stroke="#1e3a5f" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <!-- USB connectors -->
+            <rect x="388" y="305" width="14" height="7" rx="2" fill="#2a2a35"/>
+            <rect x="100" y="307" width="12" height="6" rx="2" fill="#2a2a35"/>
+
+            <!-- ── KEY ── -->
+            <g class="float-anim2" filter="url(#glow-red)">
+              <!-- Key ring -->
+              <circle cx="435" cy="110" r="18" stroke="#d97706" stroke-width="3" fill="none"/>
+              <circle cx="435" cy="110" r="10" stroke="#fbbf24" stroke-width="2" fill="none" opacity="0.5"/>
+              <!-- Key shaft -->
+              <rect x="449" y="107" width="38" height="6" rx="3" fill="url(#lgKey)"/>
+              <!-- Key teeth -->
+              <rect x="464" y="113" width="6" height="8" rx="1" fill="url(#lgKey)"/>
+              <rect x="475" y="113" width="6" height="6" rx="1" fill="url(#lgKey)"/>
+              <rect x="479" y="113" width="6" height="10" rx="1" fill="url(#lgKey)"/>
+              <circle cx="435" cy="110" r="5" fill="#fbbf24" opacity="0.5"/>
+            </g>
+
+            <!-- ── CARABINER ── -->
+            <g transform="translate(58, 130)" class="float-anim" style="animation-delay:-2s">
+              <path d="M16 0 C28 0 36 10 36 22 C36 34 28 42 16 42 C4 42 0 34 0 22 L0 18 C0 8 8 0 18 0" stroke="#4b5563" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+              <rect x="12" y="36" width="14" height="5" rx="2.5" fill="#6b7280"/>
+              <rect x="14" y="38" width="10" height="2" rx="1" fill="#9ca3af"/>
+            </g>
+
+            <!-- ── GLASSES (AR / VR style) ── -->
+            <g transform="translate(300, 50)" filter="url(#glow-blue)">
+              <!-- Frame -->
+              <rect x="0" y="10" width="50" height="28" rx="8" stroke="#2563eb" stroke-width="2" fill="rgba(37,99,235,0.08)"/>
+              <rect x="54" y="10" width="50" height="28" rx="8" stroke="#2563eb" stroke-width="2" fill="rgba(37,99,235,0.08)"/>
+              <rect x="49" y="20" width="6" height="8" rx="2" fill="#2563eb" opacity="0.6"/>
+              <!-- Nose bridge -->
+              <line x1="0" y1="24" x2="-16" y2="24" stroke="#2563eb" stroke-width="1.5" opacity="0.6"/>
+              <line x1="104" y1="24" x2="118" y2="24" stroke="#2563eb" stroke-width="1.5" opacity="0.6"/>
+              <!-- Lens HUD lines -->
+              <line x1="10" y1="18" x2="40" y2="18" stroke="#60a5fa" stroke-width="0.8" opacity="0.5"/>
+              <line x1="10" y1="22" x2="30" y2="22" stroke="#60a5fa" stroke-width="0.8" opacity="0.4"/>
+              <line x1="64" y1="18" x2="94" y2="18" stroke="#60a5fa" stroke-width="0.8" opacity="0.5"/>
+              <line x1="64" y1="22" x2="84" y2="22" stroke="#60a5fa" stroke-width="0.8" opacity="0.4"/>
+              <!-- Tiny dot indicators -->
+              <circle cx="14" cy="30" r="2" fill="#ff3b30" opacity="0.9"/>
+              <circle cx="90" cy="30" r="2" fill="#4ade80" opacity="0.9"/>
+            </g>
+
+            <!-- ── NODE CONNECTIONS (network) ── -->
+            <g filter="url(#glow-blue)" opacity="0.5">
+              <circle cx="65"  cy="400" r="5" fill="#2563eb"/>
+              <circle cx="130" cy="420" r="4" fill="#2563eb"/>
+              <circle cx="440" cy="400" r="5" fill="#ff3b30"/>
+              <circle cx="480" cy="430" r="3" fill="#ff3b30"/>
+              <line x1="65" y1="400" x2="130" y2="420" stroke="#2563eb" stroke-width="1"/>
+              <line x1="440" y1="400" x2="480" y2="430" stroke="#ff3b30" stroke-width="1"/>
+              <line x1="130" y1="420" x2="200" y2="430" stroke="#2563eb" stroke-width="0.8" opacity="0.5"/>
+              <line x1="440" y1="400" x2="380" y2="430" stroke="#ff3b30" stroke-width="0.8" opacity="0.5"/>
+            </g>
+
+            <!-- ── RED ACCENT LINES (cyberpunk decoration) ── -->
+            <g stroke="#ff3b30" stroke-width="1" opacity="0.6" filter="url(#glow-red)">
+              <line x1="100" y1="96" x2="80" y2="96"/>
+              <line x1="400" y1="96" x2="420" y2="96"/>
+              <line x1="80"  y1="96" x2="80"  y2="115"/>
+              <line x1="420" y1="96" x2="420" y2="115"/>
+            </g>
+
+            <!-- Corner brackets decoration -->
+            <g stroke="rgba(255,59,48,0.4)" stroke-width="1.5" fill="none">
+              <path d="M14 14 L14 4 L24 4"/>
+              <path d="M506 14 L506 4 L496 4"/>
+              <path d="M14 446 L14 456 L24 456"/>
+              <path d="M506 446 L506 456 L496 456"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── ABOUT ─── -->
+    <section id="about">
+      <div class="section-label reveal">/ about</div>
+      <h2 class="section-title reveal">Обо мне</h2>
+      <div class="section-divider reveal"></div>
+
+      <div class="about-grid">
+        <div class="about-text reveal">
+          <p>Я специализируюсь на OSINT&#8209;расследованиях и анализе цифровых следов. За время практики принял участие примерно в&nbsp;17&nbsp;расследованиях, связанных с мошенничеством, деятельностью организованных преступных групп и схемами, направленными на обман потребителей.</p>
+          <p>Также работаю в направлениях DevOps, автоматизации инфраструктуры и Red Team — от настройки CI/CD‑пайплайнов до проведения разведки и тестирования на проникновение.</p>
+        </div>
+
+        <div class="reveal reveal-delay-2">
+          <p style="font-size:0.75rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;">Сферы интересов</p>
+          <div class="interests-grid">
+            <div class="interest-tag"><span class="dot"></span>Offensive Security</div>
+            <div class="interest-tag"><span class="dot"></span>Web Security</div>
+            <div class="interest-tag"><span class="dot"></span>Infrastructure</div>
+            <div class="interest-tag"><span class="dot"></span>Linux</div>
+            <div class="interest-tag"><span class="dot"></span>Threat Intelligence</div>
+            <div class="interest-tag"><span class="dot"></span>Automation</div>
+            <div class="interest-tag"><span class="dot"></span>Cloud</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SKILLS ─── -->
+    <section id="skills">
+      <div class="section-label reveal">/ skills</div>
+      <h2 class="section-title reveal">Навыки</h2>
+      <div class="section-divider reveal"></div>
+
+      <div class="skills-grid">
+        <!-- OSINT -->
+        <div class="glass-card skill-card reveal">
+          <div class="skill-icon-wrap red">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <h3>OSINT</h3>
+          <div class="skill-tags">
+            <span class="skill-tag">Telegram Intel</span>
+            <span class="skill-tag">Email Intel</span>
+            <span class="skill-tag">SOCMINT</span>
+            <span class="skill-tag">Geolocation</span>
+            <span class="skill-tag">Metadata</span>
+            <span class="skill-tag">Maltego</span>
+            <span class="skill-tag">Sherlock</span>
+            <span class="skill-tag">SpiderFoot</span>
+          </div>
+        </div>
+
+        <!-- DevOps -->
+        <div class="glass-card skill-card reveal reveal-delay-1">
+          <div class="skill-icon-wrap blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+          </div>
+          <h3>DevOps</h3>
+          <div class="skill-tags">
+            <span class="skill-tag">Docker</span>
+            <span class="skill-tag">Kubernetes</span>
+            <span class="skill-tag">Linux</span>
+            <span class="skill-tag">CI/CD</span>
+            <span class="skill-tag">GitHub Actions</span>
+            <span class="skill-tag">PostgreSQL</span>
+            <span class="skill-tag">Nginx</span>
+          </div>
+        </div>
+
+        <!-- Red Team -->
+        <div class="glass-card skill-card reveal reveal-delay-2">
+          <div class="skill-icon-wrap gray">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Red Team</h3>
+          <div class="skill-tags">
+            <span class="skill-tag">Web</span>
+            <span class="skill-tag">Infrastructure</span>
+            <span class="skill-tag">Recon</span>
+            <span class="skill-tag">Enumeration</span>
+            <span class="skill-tag">Active Directory</span>
+            <span class="skill-tag">Pentest</span>
+            <span class="skill-tag">Pivoting</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── EXPERIENCE / TIMELINE ─── -->
+    <section id="experience">
+      <div class="section-label reveal">/ experience</div>
+      <h2 class="section-title reveal">Практический опыт</h2>
+      <div class="section-divider reveal"></div>
+
+      <div class="timeline" style="max-width:640px;">
+        <div class="timeline-item reveal">
+          <div class="glass-card timeline-card">
+            <div class="timeline-date">Сентябрь 2025</div>
+            <h3>Alfa CTF 2025</h3>
+            <div class="timeline-role">Участник соревнования</div>
+            <p class="timeline-desc">Web и OSINT задания. Исследование веб-уязвимостей и цифровых следов в условиях соревнования Capture&nbsp;The&nbsp;Flag от Альфа-Банка.</p>
+          </div>
+        </div>
+
+        <div class="timeline-item reveal reveal-delay-1">
+          <div class="glass-card timeline-card">
+            <div class="timeline-date">Апрель 2026</div>
+            <h3>Alfa CTF 2026</h3>
+            <div class="timeline-role">Участник соревнования</div>
+            <p class="timeline-desc">Web, OSINT и File задания. Расширенный трек: анализ файлов, форензика и разведка по открытым источникам.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── STATS ─── -->
+    <section id="stats">
+      <div class="section-label reveal">/ stats</div>
+      <h2 class="section-title reveal">Статистика</h2>
+      <div class="section-divider reveal"></div>
+
+      <div class="stats-grid">
+        <div class="glass-card stat-card reveal">
+          <div class="stat-number">17+</div>
+          <div class="stat-label">OSINT кейсов</div>
+        </div>
+        <div class="glass-card stat-card reveal reveal-delay-1">
+          <div class="stat-number">2</div>
+          <div class="stat-label">CTF соревнования</div>
+        </div>
+        <div class="glass-card stat-card reveal reveal-delay-2">
+          <div class="stat-number" style="font-size:1.7rem;">DevOps</div>
+          <div class="stat-label">Infrastructure</div>
+          <div class="stat-badge">CI/CD · Docker · K8s</div>
+        </div>
+        <div class="glass-card stat-card reveal reveal-delay-3">
+          <div class="stat-number" style="font-size:1.7rem;">Red</div>
+          <div class="stat-label">Team · Security</div>
+          <div class="stat-badge">Pentest · Recon · AD</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── CONTACT ─── -->
+    <section id="contact">
+      <div class="section-label reveal">/ contact</div>
+      <h2 class="section-title reveal">Контакты</h2>
+      <div class="section-divider reveal"></div>
+
+      <div class="contact-grid">
+        <div class="glass-card contact-card reveal">
+          <div class="contact-card-label">Email</div>
+          <div class="contact-value">recursionA30@proton.me</div>
+          <button class="btn btn-ghost" onclick="copyEmail()" style="width:fit-content;margin-top:4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Копировать Email
+          </button>
+        </div>
+
+        <div class="glass-card contact-card reveal reveal-delay-1">
+          <div class="contact-card-label">Telegram</div>
+          <div class="contact-value">@recursionnnn</div>
+          <a href="https://t.me/recursionnnn" target="_blank" class="btn btn-red" style="width:fit-content;margin-top:4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.471c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L6.27 14.385l-2.938-.916c-.637-.2-.65-.637.136-.943l11.467-4.42c.537-.194 1.006.131.627.142z"/></svg>
+            Открыть Telegram
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── FOOTER ─── -->
+    <footer>
+      <div class="footer-copy">© 2026 <span>recursion</span></div>
+      <div class="footer-built">Built with HTML, TailwindCSS &amp; Framer Motion</div>
+    </footer>
+
+  </main>
+
+  <script>
+    // ─── Custom Cursor ───
+    const cursor     = document.getElementById('cursor');
+    const cursorRing = document.getElementById('cursor-ring');
+    let mx = -100, my = -100, rx = -100, ry = -100;
+
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+    });
+
+    (function animCursor() {
+      rx += (mx - rx) * 0.15;
+      ry += (my - ry) * 0.15;
+      cursor.style.left     = mx + 'px';
+      cursor.style.top      = my + 'px';
+      cursorRing.style.left = rx + 'px';
+      cursorRing.style.top  = ry + 'px';
+      requestAnimationFrame(animCursor);
+    })();
+
+    document.querySelectorAll('a,button,.glass-card').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        cursor.style.width  = '10px';
+        cursor.style.height = '10px';
+        cursorRing.style.width  = '60px';
+        cursorRing.style.height = '60px';
+      });
+      el.addEventListener('mouseleave', () => {
+        cursor.style.width  = '20px';
+        cursor.style.height = '20px';
+        cursorRing.style.width  = '44px';
+        cursorRing.style.height = '44px';
+      });
+    });
+
+    // ─── Scroll Reveal ───
+    const reveals = document.querySelectorAll('.reveal');
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    reveals.forEach(el => io.observe(el));
+
+    // ─── Copy Email ───
+    function copyEmail() {
+      navigator.clipboard.writeText('recursionA30@proton.me').then(() => showToast());
+    }
+    function showToast() {
+      const t = document.getElementById('toast');
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // ─── Animated grid parallax ───
+    const gridBg = document.querySelector('.grid-bg');
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY;
+      gridBg.style.transform = `translateY(${y * 0.05}px)`;
+    });
+
+    // ─── Navbar hide on scroll down ───
+    let lastY = 0;
+    const nav = document.querySelector('nav');
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY;
+      nav.style.transform = (y > lastY && y > 80) ? 'translateY(-100%)' : 'translateY(0)';
+      nav.style.transition = 'transform 0.3s ease';
+      lastY = y;
+    });
+  </script>
+</body>
+</html>
